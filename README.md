@@ -19,6 +19,10 @@
 
 ## 需要 Python 2.7
 
+### 下载本程序
+Git Clone 或点击下载 ZIP 包 (0.1版本) https://github.com/zlizhe/hht/archive/0.1.zip
+版本更新发布 https://github.com/zlizhe/hht/releases
+
 ### Windows 
 
 64位系统下载 Windows x86-64 MSI installer https://www.python.org/ftp/python/2.7.12/python-2.7.12.amd64.msi
