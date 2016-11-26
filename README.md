@@ -21,7 +21,8 @@
 
 ### 下载本程序
 Git Clone 或点击下载 ZIP 包 (0.1版本) https://github.com/zlizhe/hht/archive/0.1.zip
-版本更新发布 https://github.com/zlizhe/hht/releases
+
+所有版本 https://github.com/zlizhe/hht/releases
 
 ### Windows 
 
