@@ -289,7 +289,8 @@ class DlHhtRes():
 userCate = None
 def waitUserCate():
     global userCate
-    userCate = raw_input(u'请输入正确分类拼音开始下载或直接回车下载所有分类文件：'.encode('gbk'))
+    msg = '请输入正确分类拼音开始下载或直接回车下载所有分类文件：'
+    userCate = raw_input(msg).decode(sys.stdin.encoding)
 
 print u'这里是所有可用分类拼音及其对应名称: '
 for (py, cName) in DlHhtRes._categoryName.items():
