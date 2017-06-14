@@ -1,36 +1,41 @@
 #!/usr/bin/env python
-# -*- coding=utf-8 -*-
+# -*- coding: utf-8 -*-
+import json
 import urllib
 import urllib2
 import re
 import os
 import thread
-#import threading
+# import threading
 import math
 import sys
 import time
 
 class DlHhtRes():
     '''
-    下载火火免官网 所有 该分类下的 mp3文件并按 类型分类存放
-    http://www.alilo.com.cn/?app=music&action=list&cid=gushichengbao&age=0&order=hot
+    Version 1.x
+    下载火火免APP 所有 该分类下的 mp3文件并按 类型分类存放
+    使用 json 离线下载
     '''
 
     # 下载线程数
-    _onDlNum = 200
+    _onDlNum = 50
 
     # 已下载文件数
     _fileNum = 0
 
-    # 所有需要下载的分类
-    _category = ['gushichengbao', 'ertongyinyue', 'xiguanxingge', 'guoxuetang']
+    _taskName = {
+        '1': '下载并保存文件'.decode('utf-8'),
+        '2': '重新更新数据源'.decode('utf-8')
+    }
 
     # 下载归类使用的文件夹名称
     _categoryName = {
-        'gushichengbao': '故事'.decode('utf-8'),
-        'ertongyinyue': '儿歌'.decode('utf-8'),
-        'guoxuetang': '科普知识'.decode('utf-8'),
-        'xiguanxingge': '习惯性格'.decode('utf-8')
+        '1': '儿歌'.decode('utf-8'),
+        '2': '故事'.decode('utf-8'),
+        '3': '英语'.decode('utf-8'),
+        '4': '古诗'.decode('utf-8'),
+        '5': '伴眠'.decode('utf-8')
     }
 
     # 当前正在操作的分类所有内容页的链接地址
@@ -39,173 +44,124 @@ class DlHhtRes():
     # 当前正在操作的内容页的所有下载地址 对应文件名称
     _res = []
 
+    # 获取下载链接
+    def getDlUrl(self, spName):
+        import requests
+        r = requests.post("http://www.alilo.com.cn/gw/resource/music", data={'specialname': spName})
+        #print r.text[musicList]
+        listJson = json.loads(r.text)
+        if listJson.has_key('content'):
+            musicList = listJson['content']['musicList']
+            print str(len(musicList)) + ' \'s musics' + ' in category ' + spName
+
+            if len(musicList) > 0:
+                # 所有下载链接
+                for music in musicList:
+                    self._res.append({
+                        'res': music['path'],
+                        'name': music['name']
+                    })
+        return
+
+
+
+    # 获取分类链接
+    def getCategoryName(self, catName):
+        import requests
+        r = requests.post("http://www.alilo.com.cn/gw/resource/special", data={'classname': catName, 'classid': 0})
+        #print r.text[musicList]
+        listJson = json.loads(r.text)
+        if listJson.has_key('content'):
+            specialList = listJson['content']['specialList']
+            # 没有数据
+            if len(specialList) > 0:
+                # 所有分类写入下载链接
+                for cate in specialList:
+                    self.getDlUrl(cate['name'])
+        return
+
     # 开始执行所有下载操作
-    def __init__(self, category=''):
+    def __init__(self, ac = '1', category=''):
         if __name__ == '__main__':
             if category:
                 print 'Your insert category is ' + self._categoryName[category]
             # 首先跑完所有分类以及页码 把所有 id 存储下来
-            for category in [category] if category else self._category:
-                self.getCategoryList(category)
+            for category in [category] if category else self._categoryName:
+                # 下载指令
+                if '1' == ac:
+                    self.openJson(category)
+                    if len(self._res) > 0:
+                        # 下载并命名归类文件
+                        self.downloadFile(self._categoryName[category])
+                        time.sleep(3)
+                    print str(self._fileNum) + ' files download completed, Mission complete.'
+                    # 操作完成后关机 windows 下 @todo 文件数量太大 可以使用下载完成后关机 only windows
+                    # os.system('shutdown -s -t %d' % 1)
 
-                if not self._doCategoryIds:
-                    print self._categoryName[category] + '\'s Detail ids is empty.'
-                    continue
-
-                # 通过 id 抓取所有 detail 页面的 mp3 地址
-                self.getDetailList()
-
-                if not self._res:
-                    print self._categoryName[category] + '\'s Res ids is empty.'
-                    continue
-
-                # 下载并命名归类文件
-                self.downloadFile(self._categoryName[category])
-                time.sleep(3)
-
-            print str(self._fileNum) + ' files download completed, Mission complete.'
-            # 操作完成后关机 windows 下 @todo 文件数量太大 可以使用下载完成后关机
-            # os.system('shutdown -s -t %d' % 1)
-
-
-    # 取该分类的 所有内容页链接和标题
-    def getCategoryList(self, category):
-
-        # 分类中所有的 li
-        def findCategoryLi(html):
-            # 截取正文段
-            start = html.index('<ul class="gseg_list_left_ul">')
-            try:
-                end = html.index('<div class="pages_content">')
-            except:
-                # 无分页的页面
-                end = html.index('<div class="gseg_list_right">')
-
-            # print end
-            # exit()
-            # 正文所有需要内容
-            mainContent = html[start:end]
-
-            # print mainContent
-
-            # 正则取所有 li list
-            # parttern = re.compile(r"<li.*?\/li>")
-            mainContent = re.compile('\n|\r').sub('', mainContent)  # 去除所有 \n
-            # print mainContent
-            return re.findall(r"<li>(.*?)</li>", mainContent)
-
-        def findCategoryId(liList):
-            # 从所有 li 中 找到 id
-            for li in liList:
-                startString = 'http://www.alilo.com.cn/?app=music&action=detail&id='
-                start = li.index(startString)
-                end = li.index('" target="_blank">')
-                newId = li[start + len(startString):end]
-
-                # 已存在的 id
-                if newId not in self._doCategoryIds:
-                    self._doCategoryIds.append(newId)
-            return
-
-        page = 0
-        # 没有资源时跳出页码
-        while True:
-            page += 1
-            response = urllib2.urlopen('http://www.alilo.com.cn/?app=music&action=list&cid=' + category + '&age=0&order=hot&page=' + str(page))
-            html = response.read().lower()
-
-            # all li html in list
-            liList = findCategoryLi(html)
-            # print liList
-            # exit()
-
-            # 没有任何内容的 category 或 page is max
-            if not liList:
-                print '[Empty] ' + self._categoryName[category] + ' in page ' + str(page) + ' do not have content, its over.'
-                break
-            else:
-                print self._categoryName[category] + ' in page ' + str(page) + ' was ready.'
-
-            # all id in list
-            findCategoryId(liList)
-            # print len(liList)
-            # print self._doCategoryIds
-            # print len(self._doCategoryIds)
-            # # print re.findall(parttern, mainContent)
-            # exit()
+                # 保存 数据
+                if '2' == ac:
+                    self.getCategoryName(self._categoryName[category])
+                    self.saveJson(category)
+                    # 下载并命名归类文件
+                    # self.downloadFile(self._categoryName[category])
+                    print str(len(self._res)) + ' datas save completed in ./res/' + str(category) + '.json'
+                    time.sleep(3)
 
 
-    # 取详细内容页所有可下载的链接地址
-    def getDetailList(self):
-
-        # 内容中所有的 li
-        def findDetailLi(html):
-            # 截取正文段
-            start = html.index('<div class="gseg_dvd_play_list_m">')
-            end = html.index('<a href="#" id="check_this_all"></a>')
-
-            # 正文所有需要内容
-            mainContent = html[start:end]
-
-            # 正则取所有 li list
-            # parttern = re.compile(r"<li.*?\/li>")
-            mainContent = re.compile('\n|\r').sub('', mainContent)  # 去除所有 \n
-            # print mainContent
-            return re.findall(r"<li (.*?)</li>", mainContent)
-
-        # 从 liList 中找到可供下载使用 Res
-        def findResData(liList):
-
-            #get Res
-            def getRes(data):
-                startString = 'ref="'
-                start = data.index(startString)
-                end = data.index('" name=')
-                return data[start + len(startString):end].strip()
-
-            # res's name
-            def getName(data):
-                startString = 'title=" '
-                start = data.index(startString)
-                end = data.index('" cover=')
-
-                return data[start + len(startString):end].strip()
-
-            for li in liList:
-
-                # format name and res in dict
-                resData = {
-                    'res': getRes(li),
-                    'name': getName(li).decode('utf-8')
-                }
-
-                if resData not in self._res:
-                    self._res.append(resData)
-                #     print resData['name'] + ' ' + resData['res'] + ' is in it.'
-
-            # print self._res
-            # print len(self._res)
-            # exit()
-            return
-
-        for id in self._doCategoryIds:
-            response = urllib2.urlopen('http://www.alilo.com.cn/?app=music&action=detail&id=' + id)
-            html = response.read()
-
-            # 所有 liList
-            liList = findDetailLi(html)
-
-            if not liList:
-                print '[Empty] Detail page ' + id + ' can not find res.'
-                continue
-
-            # 查找所有 Res
-            findResData(liList)
-
-        # 清空 详情内容队列
-        del self._doCategoryIds[:]
+    # 打开数据包
+    def openJson(self, catid):
+        with open('./res/' + catid + '.json', 'r') as f:
+            self._res = json.load(f)
         return
 
+    # 存 json
+    def saveJson(self, catid):
+        # 创建文件夹
+        if False == os.path.isdir('res'):
+            os.mkdir('res')
+
+        if len(self._res) > 0:
+            # 写本分类所有内容至 ./res/catid.json 文件
+            with open('./res/' + catid + '.json', 'w') as f:
+                f.write(json.dumps(self._res))
+        return
+
+    # 存储所有信息
+    def saveData(self, category):
+        import pymysql.cursors
+        import pymysql
+        # Connect to the database
+        connection = pymysql.connect(host='localhost',
+                                     user='root',
+                                     password='',
+                                     db='hht',
+                                     charset='utf8mb4',
+                                     cursorclass=pymysql.cursors.DictCursor)
+
+        try:
+
+            #  当前分类
+            with connection.cursor() as cursor:
+                # Read a single record
+                sql = "SELECT `id`, `typename`, `py` FROM `type` WHERE `py` = %s"
+                cursor.execute(sql, category)
+                typeArr = cursor.fetchone()
+
+
+            # 写入本分类下所有内容
+            with connection.cursor() as cursor:
+                for resOne in self._res:
+                    sql = "INSERT INTO `res` (`type_id`, `name`, `link`) VALUES (%s, %s, %s)"
+                    cursor.execute(sql, (typeArr['id'], resOne['name'], resOne['res']))
+
+            connection.commit()
+            print 'Insert ' + str(len(self._res)) + ' datas with category ' + typeArr['typename']
+            del typeArr
+
+
+        finally:
+            connection.close()
+        return
 
     # 线程状态
     _threadsStatus = {}
@@ -263,7 +219,7 @@ class DlHhtRes():
                         # 跳出线程 走下一个资源
                         break
                     else:
-                        # 当前线程忙 
+                        # 当前线程忙
                         continue
                     # 开始项目
                     #startRes = (dlNum // self._onDlNum) * i
@@ -286,17 +242,33 @@ class DlHhtRes():
         del self._res[:]
         return
 
+
+
 userCate = None
+taskType = None
 def waitUserCate():
     global userCate
-    msg = '请输入正确分类拼音开始下载或直接回车下载所有分类文件：'
+    msg = '请输入分类 序号 开始下载或直接回车下载所有分类文件：'
     userCate = raw_input(msg).decode(sys.stdin.encoding)
 
-print u'这里是所有可用分类拼音及其对应名称: '
+def waitUserTask():
+    global  taskType
+    msg = '请输入任务类型序号 ：'
+    taskType = raw_input(msg).decode(sys.stdin.encoding)
+
+print u'::1:: 这里是所有可用分类 ID 以及其对应名称: '
 for (py, cName) in DlHhtRes._categoryName.items():
-    print cName + ' : ' + py
-while userCate not in DlHhtRes._category and userCate != '':
+    print py + ' : ' + cName
+while userCate not in DlHhtRes._categoryName and userCate != '':
     waitUserCate()
     pass
 else:
-    DlHhtRes(userCate)
+    print u'::2:: 这里是可用的任务类型, 为防止火火兔再次更新接口导致下载器不可用, 目前这一版本已自带数据源一般用户无需 重新更新数据源 直接选择下载并保存文件即可, 如需更新数据源, 请备份 ./res/ 文件夹后 确认已安装 requests (pip install requests) 后执行 重新更新数据源 操作之后再次执行 下载并保存文件 即可'
+    for (py, name) in DlHhtRes._taskName.items():
+        print py + ' : ' + name
+
+    while taskType not in DlHhtRes._taskName:
+        waitUserTask()
+        pass
+    else:
+        DlHhtRes(taskType, userCate)
