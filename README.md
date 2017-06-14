@@ -30,7 +30,7 @@
 ## 需要 Python 2.7
 
 ### 下载本程序
-Git Clone 或点击下载 ZIP 包 (0.1版本) https://github.com/zlizhe/hht/archive/0.1.zip
+Git Clone 或点击下载 ZIP 包 (1.0 版本) https://github.com/zlizhe/hht/releases/tag/1.0
 
 所有版本 https://github.com/zlizhe/hht/releases
 
