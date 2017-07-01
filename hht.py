@@ -248,13 +248,13 @@ userCate = None
 taskType = None
 def waitUserCate():
     global userCate
-    msg = '请输入分类 序号 开始下载或直接回车下载所有分类文件：'
-    userCate = raw_input(msg).decode(sys.stdin.encoding)
+    msg = u'请输入分类 序号 开始下载或直接回车下载所有分类文件：'
+    userCate = raw_input(msg.encode(sys.stdin.encoding)).decode(sys.stdin.encoding)
 
 def waitUserTask():
     global  taskType
-    msg = '请输入任务类型序号 ：'
-    taskType = raw_input(msg).decode(sys.stdin.encoding)
+    msg = u'请输入任务类型序号 ：'
+    taskType = raw_input(msg.encode(sys.stdin.encoding)).decode(sys.stdin.encoding)
 
 print u'::1:: 这里是所有可用分类 ID 以及其对应名称: '
 for (py, cName) in DlHhtRes._categoryName.items():
