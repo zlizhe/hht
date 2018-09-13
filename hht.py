@@ -183,13 +183,22 @@ class DlHhtRes():
             # 当前所有线程总下载数
             self.allThreadNum += 1
             # 下载文件 至分类目录 并重新命名
-            fileName = categoryName + '/' + res['name'] + getFileExp(res['res'])
+            reg = re.compile(r'[\\/:*?"<>|\r\n]+')
+            baseName = res['name'] + getFileExp(res['res'])
+            validName = reg.findall(baseName)
+            if validName:
+                for nv in validName:
+                    baseName = baseName.replace(nv, "_")
+            fileName = categoryName + '/' + baseName
 
             if not os.path.isfile(fileName):
-                urllib.urlretrieve(res['res'], fileName)
-                # 已下载的总文件数量
-                self._fileNum += 1
-                print threadName + res['name'] + ' file ' + res['res'] + ' is download.'
+                try:
+                    urllib.urlretrieve(res['res'], fileName)
+                    # 已下载的总文件数量
+                    self._fileNum += 1
+                    print threadName + res['name'] + ' file ' + res['res'] + ' is download.'
+                except Exception:
+                    print "Network Error: " + res['res']
             else:
                 print threadName + res['name'] + ' file ' + res['res'] + ' is exist.'
             # 释放线程占用
