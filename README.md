@@ -2,6 +2,12 @@
 
 # 火火兔 儿歌一键批量高速下载 (非官方)
 
+![GitHub All Releases](https://img.shields.io/github/downloads/atom/atom/total.svg)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/badges/shields.svg)
+![GitHub release](https://img.shields.io/github/release/qubyte/rubidium.svg)
+
+
+
 由于火火兔故事机的PC客户端下载文件速度太慢，批量下载操作复杂。故使用多线程批量下载指定资源文件，旨在为所有已购买火火兔故事机的用户提供更加便捷的下载体验。
 
 # Version 1.x
