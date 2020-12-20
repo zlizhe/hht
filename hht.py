@@ -1,15 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import json
 import urllib
-import urllib2
 import re
 import os
-import thread
-# import threading
+import threading
 import math
 import sys
 import time
+import requests
+
+from concurrent import futures
+from os import path
 
 class DlHhtRes():
     '''
@@ -25,17 +27,17 @@ class DlHhtRes():
     _fileNum = 0
 
     _taskName = {
-        '1': '下载并保存文件'.decode('utf-8'),
-        '2': '重新更新数据源'.decode('utf-8')
+        '1': '下载并保存文件',
+        '2': '重新更新数据源'
     }
 
     # 下载归类使用的文件夹名称
     _categoryName = {
-        '1': '儿歌'.decode('utf-8'),
-        '2': '故事'.decode('utf-8'),
-        '3': '英语'.decode('utf-8'),
-        '4': '古诗'.decode('utf-8'),
-        '5': '伴眠'.decode('utf-8')
+        '1': '儿歌',
+        '2': '故事',
+        '3': '英语',
+        '4': '古诗',
+        '5': '伴眠'
     }
 
     # 当前正在操作的分类所有内容页的链接地址
@@ -50,9 +52,9 @@ class DlHhtRes():
         r = requests.post("http://www.alilo.com.cn/gw/resource/music", data={'specialname': spName})
         #print r.text[musicList]
         listJson = json.loads(r.text)
-        if listJson.has_key('content'):
+        if 'content' in listJson:
             musicList = listJson['content']['musicList']
-            print str(len(musicList)) + ' \'s musics' + ' in category ' + spName
+            print(str(len(musicList)) + ' \'s musics' + ' in category ' + spName)
 
             if len(musicList) > 0:
                 # 所有下载链接
@@ -63,15 +65,13 @@ class DlHhtRes():
                     })
         return
 
-
-
     # 获取分类链接
     def getCategoryName(self, catName):
         import requests
         r = requests.post("http://www.alilo.com.cn/gw/resource/special", data={'classname': catName, 'classid': 0})
         #print r.text[musicList]
         listJson = json.loads(r.text)
-        if listJson.has_key('content'):
+        if 'content' in listJson:
             specialList = listJson['content']['specialList']
             # 没有数据
             if len(specialList) > 0:
@@ -84,7 +84,7 @@ class DlHhtRes():
     def __init__(self, ac = '1', category=''):
         if __name__ == '__main__':
             if category:
-                print 'Your insert category is ' + self._categoryName[category]
+                print('Your insert category is ' + self._categoryName[category])
             # 首先跑完所有分类以及页码 把所有 id 存储下来
             for category in [category] if category else self._categoryName:
                 # 下载指令
@@ -94,7 +94,7 @@ class DlHhtRes():
                         # 下载并命名归类文件
                         self.downloadFile(self._categoryName[category])
                         time.sleep(3)
-                    print str(self._fileNum) + ' files download completed, Mission complete.'
+                    print(str(self._fileNum) + ' files download completed, Mission complete.')
                     # 操作完成后关机 windows 下 @todo 文件数量太大 可以使用下载完成后关机 only windows
                     # os.system('shutdown -s -t %d' % 1)
 
@@ -104,7 +104,7 @@ class DlHhtRes():
                     self.saveJson(category)
                     # 下载并命名归类文件
                     # self.downloadFile(self._categoryName[category])
-                    print str(len(self._res)) + ' datas save completed in ./res/' + str(category) + '.json'
+                    print(str(len(self._res)) + ' datas save completed in ./res/' + str(category) + '.json')
                     time.sleep(3)
 
 
@@ -126,155 +126,84 @@ class DlHhtRes():
                 f.write(json.dumps(self._res))
         return
 
-    # 存储所有信息
-    def saveData(self, category):
-        import pymysql.cursors
-        import pymysql
-        # Connect to the database
-        connection = pymysql.connect(host='localhost',
-                                     user='root',
-                                     password='',
-                                     db='hht',
-                                     charset='utf8mb4',
-                                     cursorclass=pymysql.cursors.DictCursor)
-
-        try:
-
-            #  当前分类
-            with connection.cursor() as cursor:
-                # Read a single record
-                sql = "SELECT `id`, `typename`, `py` FROM `type` WHERE `py` = %s"
-                cursor.execute(sql, category)
-                typeArr = cursor.fetchone()
-
-
-            # 写入本分类下所有内容
-            with connection.cursor() as cursor:
-                for resOne in self._res:
-                    sql = "INSERT INTO `res` (`type_id`, `name`, `link`) VALUES (%s, %s, %s)"
-                    cursor.execute(sql, (typeArr['id'], resOne['name'], resOne['res']))
-
-            connection.commit()
-            print 'Insert ' + str(len(self._res)) + ' datas with category ' + typeArr['typename']
-            del typeArr
-
-
-        finally:
-            connection.close()
-        return
-
-    # 线程状态
-    _threadsStatus = {}
     # 下载该文件
     def downloadFile(self, categoryName):
         # 创建文件夹
         if False == os.path.isdir(categoryName):
             os.mkdir(categoryName)
 
-
         # 所有线程下载总数
         self.allThreadNum = 0
-        def dl(threadName, delay, res):
-
-            # 取文件扩展名称
-            def getFileExp(file):
-                return '.'+file[-3:]
-
-            # 当前所有线程总下载数
-            self.allThreadNum += 1
-            # 下载文件 至分类目录 并重新命名
-            reg = re.compile(r'[\\/:*?"<>|\r\n]+')
-            baseName = res['name'] + getFileExp(res['res'])
-            validName = reg.findall(baseName)
-            if validName:
-                for nv in validName:
-                    baseName = baseName.replace(nv, "_")
-            fileName = categoryName + '/' + baseName
-
-            if not os.path.isfile(fileName):
-                try:
-                    urllib.urlretrieve(res['res'], fileName)
-                    # 已下载的总文件数量
-                    self._fileNum += 1
-                    print threadName + res['name'] + ' file ' + res['res'] + ' is download.'
-                except Exception:
-                    print "Network Error: " + res['res']
-            else:
-                print threadName + res['name'] + ' file ' + res['res'] + ' is exist.'
-            # 释放线程占用
-            del self._threadsStatus[threadName]
-            thread.exit_thread()
-            time.sleep(2)
 
         # 下载总数
         dlNum = len(self._res)
-        try:
-            # threadNum = int(math.ceil(dlNum / float(self._onDlNum)))
-            # 5线程下载
-            # 还剩下多少 需要开启多少线程
-            # lastedNum = dlNum % self._onDlNum
-            threadNum = dlNum if dlNum < self._onDlNum else self._onDlNum
-            print categoryName + ' was download by ' + str(threadNum) + ' threads with ' + str(dlNum) + ' files.'
-            # 所有资源
-            for dlres in self._res:
-                # 所有线程
-                for i in xrange(self._onDlNum):
-                    # 如果当前线程空闲则给他操作，否则什么也不做
-                    threadI = 'Thread-' + str(i)
-                    if not self._threadsStatus.has_key(threadI):
-                        # 开启新线程
-                        self._threadsStatus[threadI] = dlres
-                        thread.start_new_thread(dl, (threadI, i + 2, dlres))
-                        # 跳出线程 走下一个资源
-                        break
-                    else:
-                        # 当前线程忙
-                        continue
-                    # 开始项目
-                    #startRes = (dlNum // self._onDlNum) * i
-                    # 结束项目
-                    #endRes = (startRes + startRes) if i >= threadNum else None
-                    #thread.start_new_thread(dl, ('[Thread-' + str(i) + '] ', i + 2, self._res[startRes : endRes]))
-                # 检查是否有空闲线程
-                while len(self._threadsStatus) >= self._onDlNum:
-                    pass
-        except:
-            print 'Download thread start error' , sys.exc_info()[0]
-            raise
+        
+        # threadNum = int(math.ceil(dlNum / float(self._onDlNum)))
+        # 5线程下载
+        # 还剩下多少 需要开启多少线程
+        # lastedNum = dlNum % self._onDlNum
+        threadNum = dlNum if dlNum < self._onDlNum else self._onDlNum
+        print(categoryName + ' was download by ' + str(threadNum) + ' threads with ' + str(dlNum) + ' files.')
 
-        # # 所有线程中还有未下载完成的
-        # while self.allThreadNum < dlNum:
-        #     pass
-
-        print categoryName + str(len(self._res)) + ' files download completed.'
+        # 所有资源
+        executor = futures.ThreadPoolExecutor(max_workers=10)
+        for dlres in self._res:
+            executor.submit(dl, categoryName, dlres)
+            #dl(categoryName, dlres)
+        executor.shutdown(wait=True)
+                
+        print(categoryName + str(len(self._res)) + ' files download completed.')
         # 清空本category 使用的下载队列
         del self._res[:]
         return
 
+def dl(categoryName, res):
+    # 取文件扩展名称
+    def getFileExp(file):
+        return '.'+file[-3:]
 
+    # 下载文件 至分类目录 并重新命名
+    reg = re.compile(r'[\\/:*?"<>|\r\n]+')
+    baseName = res['name'] + getFileExp(res['res'])
+    validName = reg.findall(baseName)
+    if validName:
+        for nv in validName:
+            baseName = baseName.replace(nv, "_")
+    fileName = categoryName + '/' + baseName
+    if path.exists(fileName):
+        print('File {} already exists'.format(fileName))
+        return
+
+    url = res['res']
+    print('downloading url: ' + url)
+    user_agent = {'User-agent': 'Mozilla/5.0'}
+    resp = requests.get(url, headers = user_agent) 
+    with open(fileName, "wb") as file:
+        file.write(resp.content)
+    print('done url: ' + url)
 
 userCate = None
 taskType = None
 def waitUserCate():
     global userCate
-    msg = u'请输入分类 序号 开始下载或直接回车下载所有分类文件：'
-    userCate = raw_input(msg.encode(sys.stdin.encoding)).decode(sys.stdin.encoding)
+    msg = '请输入分类 序号 开始下载或直接回车下载所有分类文件：'
+    userCate = input(msg)
 
 def waitUserTask():
     global  taskType
     msg = u'请输入任务类型序号 ：'
-    taskType = raw_input(msg.encode(sys.stdin.encoding)).decode(sys.stdin.encoding)
+    taskType = input(msg)
 
-print u'::1:: 这里是所有可用分类 ID 以及其对应名称: '
+print(u'::1:: 这里是所有可用分类 ID 以及其对应名称: ')
 for (py, cName) in DlHhtRes._categoryName.items():
-    print py + ' : ' + cName
+    print(py + ' : ' + cName)
 while userCate not in DlHhtRes._categoryName and userCate != '':
     waitUserCate()
     pass
 else:
-    print u'::2:: 这里是可用的任务类型, 为防止火火兔再次更新接口导致下载器不可用, 目前这一版本已自带数据源一般用户无需 重新更新数据源 直接选择下载并保存文件即可, 如需更新数据源, 请备份 ./res/ 文件夹后 确认已安装 requests (pip install requests) 后执行 重新更新数据源 操作之后再次执行 下载并保存文件 即可'
+    print(u'::2:: 这里是可用的任务类型, 为防止火火兔再次更新接口导致下载器不可用, 目前这一版本已自带数据源一般用户无需 重新更新数据源 直接选择下载并保存文件即可, 如需更新数据源, 请备份 ./res/ 文件夹后 确认已安装 requests (pip install requests) 后执行 重新更新数据源 操作之后再次执行 下载并保存文件 即可')
     for (py, name) in DlHhtRes._taskName.items():
-        print py + ' : ' + name
+        print(py + ' : ' + name)
 
     while taskType not in DlHhtRes._taskName:
         waitUserTask()
